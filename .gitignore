@@ -1,0 +1,13 @@
+# Clé API secrète — ne jamais partager !
+.env
+
+# Base vectorielle — trop lourde pour GitHub
+faiss_index/
+
+# Environnement virtuel — inutile en ligne
+venv/
+
+# Fichiers système Windows
+__pycache__/
+*.pyc
+.DS_Store
