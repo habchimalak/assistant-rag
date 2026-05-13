@@ -1,45 +1,40 @@
 import streamlit as st
 
-
 def generer_quiz(retriever, llm, nb_questions):
-    docs = retriever.invoke("concepts importants definitions")
+    """Génère un quiz QCM depuis les documents"""
+    docs = retriever.invoke("concepts importants définitions")
     contexte = "\n\n".join(d.page_content for d in docs)
 
     prompt = f"""
-    Tu es un professeur. Genere exactement {nb_questions}
-    questions QCM basees sur ce contenu.
-    Chaque question a 4 choix (A, B, C, D) et UNE seule
-    bonne reponse.
-
+    Tu es un professeur. Génère exactement {nb_questions} 
+    questions QCM basées sur ce contenu.
+    Chaque question a 4 choix (A, B, C, D) et UNE seule 
+    bonne réponse.
+    
     Format OBLIGATOIRE :
     Q1: [question]
     A) [choix]
     B) [choix]
     C) [choix]
     D) [choix]
-    Reponse: [lettre]
+    Réponse: [lettre]
     Explication: [courte explication]
     ---
-
+    
     Contenu : {contexte}
-    Genere les questions en francais.
+    Génère les questions en français.
     """
     return llm.invoke(prompt).content
 
-
 def afficher_quiz(quiz_texte):
-    questions = [q for q in quiz_texte.split("---") if q.strip()]
-
-    # Initialiser les réponses et validations
-    if "reponses_user" not in st.session_state:
-        st.session_state.reponses_user = {}
-    if "validees" not in st.session_state:
-        st.session_state.validees = {}
-
+    """Affiche le quiz et calcule le score"""
+    questions = quiz_texte.split("---")
     score = 0
     total = 0
 
     for i, bloc in enumerate(questions):
+        if not bloc.strip():
+            continue
         lignes = [
             l.strip() for l in bloc.strip().split("\n")
             if l.strip()
@@ -54,8 +49,8 @@ def afficher_quiz(quiz_texte):
             if l.startswith(("A)", "B)", "C)", "D)"))
         ]
         bonne_rep = next(
-            (l.replace("Reponse:", "").strip()
-             for l in lignes if l.startswith("Reponse:")),
+            (l.replace("Réponse:", "").strip()
+             for l in lignes if l.startswith("Réponse:")),
             "A"
         )
         explication = next(
@@ -64,63 +59,33 @@ def afficher_quiz(quiz_texte):
             ""
         )
 
-        # Afficher la question
         st.markdown(f"**{question}**")
+        rep_user = st.radio(
+            f"Question {i+1}",
+            choix,
+            key=f"q_{i}",
+            label_visibility="collapsed"
+        )
 
-        # Si pas encore validée — afficher les choix
-        if not st.session_state.validees.get(i):
-            rep = st.radio(
-                f"Choix {i+1}",
-                choix,
-                key=f"q_{i}",
-                label_visibility="collapsed"
-            )
-            st.session_state.reponses_user[i] = rep
-
-            # Bouton valider
-            if st.button("Valider", key=f"btn_{i}"):
-                st.session_state.validees[i] = True
-                st.rerun()
-
-        # Si validée — afficher le résultat
-        else:
-            rep_choisie = st.session_state.reponses_user.get(i, "")
-
-            # Afficher les choix en lecture seule
-            for c in choix:
-                lettre = c[0]
-                if lettre == bonne_rep and lettre == (rep_choisie[0] if rep_choisie else ""):
-                    st.markdown(f"✅ **{c}** ← Ta réponse — Correct !")
-                elif lettre == bonne_rep:
-                    st.markdown(f"✅ **{c}** ← Bonne réponse")
-                elif rep_choisie and lettre == rep_choisie[0]:
-                    st.markdown(f"❌ {c} ← Ta réponse")
-                else:
-                    st.markdown(f"○ {c}")
-
-            # Explication
-            if rep_choisie and rep_choisie[0] == bonne_rep:
-                st.success(f"Correct ! {explication}")
+        if rep_user:
+            if rep_user[0] == bonne_rep:
+                st.success(f"✅ Correct ! {explication}")
                 score += 1
             else:
-                st.error(f"Incorrect. {explication}")
-
+                st.error(
+                    f"❌ Incorrect. "
+                    f"Bonne réponse : {bonne_rep}. "
+                    f"{explication}"
+                )
         st.divider()
 
-    # Score final — seulement si tout est validé
-    if total > 0 and len(st.session_state.validees) == total:
+    if total > 0:
         pct = int((score / total) * 100)
-        st.markdown(f"### Score final : {score}/{total} ({pct}%)")
+        st.markdown(f"### 🏆 Score : {score}/{total} ({pct}%)")
         if pct >= 80:
             st.balloons()
-            st.success("Excellent ! Tu maitrises ce cours !")
+            st.success("Excellent ! Tu maîtrises ce cours !")
         elif pct >= 50:
-            st.info("Bien ! Continue a reviser !")
+            st.info("Bien ! Continue à réviser !")
         else:
-            st.warning("Courage ! Relis le cours et reessaie !")
-
-        if st.button("Recommencer le quiz"):
-            st.session_state.quiz = None
-            st.session_state.reponses_user = {}
-            st.session_state.validees = {}
-            st.rerun()
+            st.warning("Courage ! Relis le cours et réessaie !")
